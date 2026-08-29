@@ -19,6 +19,7 @@ COPY . .
 
 # Create data directories
 RUN mkdir -p data/standards data/schemes chroma_db
+RUN python scripts/ingest.py
 
 EXPOSE 8000
 
