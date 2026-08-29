@@ -22,4 +22,4 @@ RUN mkdir -p data/standards data/schemes chroma_db
 
 EXPOSE 8000
 
-CMD ["python scripts/ingest.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "python scripts/ingest.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
