@@ -94,7 +94,7 @@ export default function ChatWindow() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [displayedChips, setDisplayedChips] = useState(() => pickRandomChips(SUGGESTION_POOL, 6));
+  const [displayedChips, setDisplayedChips] = useState<string[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -137,6 +137,11 @@ export default function ChatWindow() {
     }
     localStorage.setItem(THEME_KEY, darkMode ? "dark" : "light");
   }, [darkMode]);
+
+  // Populate chips client-side only to avoid hydration mismatch
+  useEffect(() => {
+    setDisplayedChips(pickRandomChips(SUGGESTION_POOL, 6));
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

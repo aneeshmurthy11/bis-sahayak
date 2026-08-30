@@ -305,33 +305,30 @@ textarea.chat-input:focus-visible {
 .theme-switch input:checked + .slider:before {
   transform: translateX(100%);
 }
-/* Icons — positioned inside the knob area */
+/* Icons wrapper — moves with the knob */
+.theme-switch .toggle-icons {
+  position: absolute;
+  left: 10%;
+  bottom: 15%;
+  height: 1.4em;
+  width: 1.4em;
+  z-index: 4;
+  pointer-events: none;
+  transition: transform 0.4s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.theme-switch input:checked + .slider .toggle-icons {
+  transform: translateX(100%);
+}
+/* Single icon centered inside the wrapper */
 .theme-switch .toggle-icon {
   position: absolute;
   top: 50%;
-  transform: translateY(-50%);
+  left: 50%;
+  transform: translate(-50%, -50%);
   pointer-events: none;
-  transition: opacity 0.4s, left 0.4s, right 0.4s;
-  z-index: 2;
-}
-/* Sun icon: left side in light mode */
-.theme-switch .toggle-icon-sun {
-  left: 0.4em;
-  opacity: 1;
-  color: #F59E0B;
-}
-/* Moon icon: right side in dark mode */
-.theme-switch .toggle-icon-moon {
-  right: 0.4em;
-  opacity: 0;
-  color: #ECECEC;
-}
-/* Dark mode: hide sun, show moon */
-.theme-switch input:checked + .slider .toggle-icon-sun {
-  opacity: 0;
-}
-.theme-switch input:checked + .slider .toggle-icon-moon {
-  opacity: 1;
 }
 
 
