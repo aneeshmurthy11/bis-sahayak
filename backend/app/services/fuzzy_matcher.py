@@ -183,12 +183,22 @@ class FuzzyMatchResult:
 
 
 def _extract_query_tokens(query: str) -> list[str]:
-    """Extract meaningful tokens from a query, preserving multi-word phrases."""
+    """Extract meaningful tokens from a query, preserving multi-word phrases.
+
+    Skips IS code patterns (IS 15757, IS15757, etc.) to avoid corruption.
+    """
+    import re
     query_lower = query.lower().strip()
+
+    # Preserve IS codes — remove them before tokenizing
+    is_codes = re.findall(r'IS[\s\-]*\d+', query, re.IGNORECASE)
+    sanitized = re.sub(r'IS[\s\-]*\d+', ' ', query, flags=re.IGNORECASE)
+    sanitized_lower = sanitized.lower().strip()
+
     tokens = []
     # Try to match longest known phrases first
     sorted_aliases = sorted(_ALIAS_MAP.keys(), key=len, reverse=True)
-    remaining = query_lower
+    remaining = sanitized_lower
     for alias in sorted_aliases:
         while alias in remaining:
             tokens.append(alias)
@@ -205,8 +215,17 @@ def match_query(query: str) -> FuzzyMatchResult | None:
 
     Returns a FuzzyMatchResult if a match is found above the threshold (60).
     Returns None if nothing matches.
+
+    IMPORTANT: Skips queries containing IS codes (IS 15757, IS15757, etc.)
+    to avoid corrupting the query with false corrections.
     """
+    import re
     query_lower = query.lower().strip()
+
+    # ── SKIP: If query contains an IS code, don't fuzzy-match ──
+    # IS codes should go directly to RAG, not through fuzzy correction
+    if re.search(r'IS[\s\-]*\d+', query, re.IGNORECASE):
+        return None
 
     # ── 1. Try exact / substring match first ──
     for alias, entry in _ALIAS_MAP.items():

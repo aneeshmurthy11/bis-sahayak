@@ -174,18 +174,120 @@ def _get_chroma_collection():
     )
 
 
+def extract_is_code(query: str) -> str | None:
+    """Extract and normalize an IS code from a query.
+
+    Handles: IS 15757, IS15757, IS-15757, is 15757, is15757
+    Returns normalized form: 'IS 15757'
+    """
+    import re
+    match = re.search(r'IS[\s\-]*(\d+)', query, re.IGNORECASE)
+    if match:
+        return f"IS {match.group(1)}"
+    return None
+
+
+def exact_metadata_lookup(is_code: str) -> list[dict]:
+    """Search ChromaDB metadata for exact IS code match.
+
+    This is the highest-priority retrieval method.
+    If a PDF with this IS code exists in the index, return its chunks directly.
+
+    Handles both old format (source='302_1') and new format (is_code='IS 302').
+    """
+    collection = _get_chroma_collection()
+    is_num = is_code.replace("IS ", "")
+    
+    # Strategy 1: Search by is_code metadata field (new PDFs)
+    try:
+        results = collection.get(
+            where={"is_code": is_code},
+            include=["documents", "metadatas"],
+            limit=20,
+        )
+        if results and results["documents"] and len(results["documents"]) > 0:
+            chunks = []
+            for i, doc in enumerate(results["documents"]):
+                metadata = results["metadatas"][i] if results["metadatas"] else {}
+                chunks.append({
+                    "text": doc,
+                    "metadata": metadata,
+                    "distance": 0.0,
+                })
+            return chunks
+    except Exception:
+        pass
+
+    # Strategy 2: Search by source field matching IS code (new PDFs)
+    try:
+        results = collection.get(
+            where={"source": is_code},
+            include=["documents", "metadatas"],
+            limit=20,
+        )
+        if results and results["documents"] and len(results["documents"]) > 0:
+            chunks = []
+            for i, doc in enumerate(results["documents"]):
+                metadata = results["metadatas"][i] if results["metadatas"] else {}
+                chunks.append({
+                    "text": doc,
+                    "metadata": metadata,
+                    "distance": 0.0,
+                })
+            return chunks
+    except Exception:
+        pass
+
+    # Strategy 3: Scan all metadata for source containing the IS number (old PDFs)
+    # Old PDFs have source like '302_1', '10500# 2012', '1417#', etc.
+    try:
+        all_data = collection.get(include=["documents", "metadatas"])
+        if all_data and all_data["metadatas"]:
+            matched_chunks = []
+            for i, meta in enumerate(all_data["metadatas"]):
+                source = meta.get("source", "")
+                # Check if source starts with the IS number
+                # e.g., source='302_1' matches IS 302
+                # e.g., source='10500# 2012' matches IS 10500
+                source_num = source.split("_")[0].split("#")[0].split(" ")[0].strip()
+                if source_num == is_num:
+                    doc = all_data["documents"][i] if all_data["documents"] else ""
+                    matched_chunks.append({
+                        "text": doc,
+                        "metadata": meta,
+                        "distance": 0.0,
+                    })
+            if matched_chunks:
+                return matched_chunks[:20]
+    except Exception:
+        pass
+
+    return []
+
+
 def retrieve_chunks(query: str, top_k: int | None = None) -> list[dict]:
     """Retrieve the most relevant chunks from ChromaDB.
 
-    Improvements in 2.1:
-    - Retrieves 3x top_k candidates then deduplicates and re-ranks
-    - IS code boosting: chunks matching exact IS codes get priority
-    - Source deduplication ensures diversity across documents
-    - Clause-aware: if query mentions a clause, boost chunks with that clause
+    Strategy (in priority order):
+    1. Exact metadata lookup by IS code (highest priority)
+    2. Semantic search with IS code boosting
+    3. Keyword fallback
+
+    Never returns empty if the PDF exists in the index.
     """
     import re
     settings = get_settings()
     k = top_k or settings.RAG_TOP_K
+
+    # ── Step 1: Try exact metadata lookup first ──
+    is_code = extract_is_code(query)
+    if is_code:
+        exact_chunks = exact_metadata_lookup(is_code)
+        if exact_chunks:
+            # Found exact match — return these (up to k chunks)
+            return exact_chunks[:k]
+
+    # ── Step 2: Semantic search with boosting ──
     fetch_k = k * 3
     collection = _get_chroma_collection()
     query_embedding = embed_query(query)
