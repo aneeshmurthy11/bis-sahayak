@@ -129,7 +129,7 @@ export default function MessageBubble({
               "bg-gray-50 dark:bg-gray-800/20 border border-gray-200 dark:border-gray-700/40 text-gray-600 dark:text-gray-400"
             )}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" strokeLinecap="round" strokeLinejoin="round" /><path d="M22 4L12 14.01l-3-3" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              {confidence}% Match
+              {confidence >= 85 ? "Verified from BIS Documents" : confidence >= 65 ? "AI Summary from BIS Documents" : "Based on available information"}
             </div>
           </div>
         )}
