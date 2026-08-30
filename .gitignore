@@ -44,3 +44,4 @@ gemini_result.json
 
 # Build artifacts
 *.tsbuildinfo
+chroma_db/
