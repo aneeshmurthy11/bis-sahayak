@@ -10,6 +10,7 @@ from app.services.translator import detect_language, translate_to_english, trans
 from app.services.matcher import recommend_standards
 from app.services.certification import get_certification_guide, get_hallmarking_faq, CERTIFICATION_SCHEMES
 from app.services.labs import search_labs
+from app.services.fuzzy_matcher import match_query, apply_correction, get_no_match_message
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -25,7 +26,40 @@ async def chat(req: ChatRequest):
 
     query_en = translate_to_english(req.message, user_lang) if user_lang != "en" else req.message
 
-    # ── Step 2: Route by mode ──
+    # ── Step 2: Fuzzy match for typos / misspellings ──
+    correction_info = None
+    fuzzy_match = match_query(query_en)
+    if fuzzy_match:
+        if fuzzy_match.confidence >= 90:
+            # Auto-correct silently
+            query_en = apply_correction(query_en, fuzzy_match)
+            correction_info = {
+                "original_word": fuzzy_match.original_word,
+                "corrected_word": fuzzy_match.corrected_word,
+                "confidence": fuzzy_match.confidence,
+                "suggestions": fuzzy_match.suggestions,
+            }
+        elif fuzzy_match.confidence >= 75:
+            # "Did you mean X?" — still proceed with corrected query
+            query_en = apply_correction(query_en, fuzzy_match)
+            correction_info = {
+                "original_word": fuzzy_match.original_word,
+                "corrected_word": fuzzy_match.corrected_word,
+                "confidence": fuzzy_match.confidence,
+                "suggestions": fuzzy_match.suggestions,
+            }
+        elif fuzzy_match.confidence >= 60:
+            # Multiple suggestions — proceed with best match
+            query_en = apply_correction(query_en, fuzzy_match)
+            correction_info = {
+                "original_word": fuzzy_match.original_word,
+                "corrected_word": fuzzy_match.corrected_word,
+                "confidence": fuzzy_match.confidence,
+                "suggestions": fuzzy_match.suggestions,
+            }
+        # Below 60: no correction, let it flow through normally
+
+    # ── Step 3: Route by mode ──
     answer = ""
     sources: list[Source] = []
 
@@ -117,4 +151,8 @@ async def chat(req: ChatRequest):
     if user_lang != "en":
         answer = translate_from_english(answer, user_lang)
 
-    return ChatResponse(answer=answer, sources=sources, mode=req.mode)
+    from app.models.schemas import CorrectionInfo
+    corr = None
+    if correction_info:
+        corr = CorrectionInfo(**correction_info)
+    return ChatResponse(answer=answer, sources=sources, mode=req.mode, correction=corr)

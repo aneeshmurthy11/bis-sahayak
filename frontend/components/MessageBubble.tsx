@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { Source } from "@/lib/api";
+import { Source, CorrectionInfo } from "@/lib/api";
 import SourceCitation from "./SourceCitation";
 
 interface MessageBubbleProps {
@@ -11,6 +11,7 @@ interface MessageBubbleProps {
   sources?: Source[];
   streaming?: boolean;
   showSources?: boolean;
+  correction?: CorrectionInfo | null;
   onRegenerate?: () => void;
   onEdit?: (newContent: string) => void;
 }
@@ -21,6 +22,7 @@ export default function MessageBubble({
   sources,
   streaming = false,
   showSources = true,
+  correction,
   onRegenerate,
   onEdit,
 }: MessageBubbleProps) {
@@ -80,6 +82,31 @@ export default function MessageBubble({
                   <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 Verified
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Correction chip -- Did you mean...? */}
+        {correction && !isUser && !streaming && (
+          <div className="mb-2 ml-1 animate-fade-in">
+            {correction.suggestions.length > 1 ? (
+              <div className="inline-flex flex-wrap items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 text-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2" className="shrink-0" aria-hidden="true">
+                  <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+                </svg>
+                <span className="text-gray-600 dark:text-[#A1A1AA]">Did you mean:</span>
+                {correction.suggestions.map((s, i) => (
+                  <span key={s} className="font-medium text-[#3B82F6] dark:text-[#60A5FA]">{s}{i < correction.suggestions.length - 1 ? ',' : '?'}</span>
+                ))}
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 text-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2" className="shrink-0" aria-hidden="true">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+                </svg>
+                <span className="text-gray-600 dark:text-[#A1A1AA]">Did you mean:</span>
+                <span className="font-medium text-[#3B82F6] dark:text-[#60A5FA]">{correction.corrected_word}?</span>
               </div>
             )}
           </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { ChatMode, Source } from "@/lib/api";
+import { ChatMode, Source, CorrectionInfo } from "@/lib/api";
 import MessageBubble from "./MessageBubble";
 import TypingIndicator from "./TypingIndicator";
 import QuickActions from "./QuickActions";
@@ -22,6 +22,7 @@ interface Message {
   sources?: Source[];
   mode?: ChatMode;
   streaming?: boolean;
+  correction?: CorrectionInfo | null;
 }
 
 const MODE_TABS: { mode: ChatMode; label: string; icon: string }[] = [
@@ -233,6 +234,7 @@ export default function ChatWindow() {
           sources: data.sources,
           mode: activeMode,
           streaming: true,
+          correction: data.correction || null,
         };
         setMessages((prev) => [...prev, assistantMsg]);
 
@@ -425,6 +427,7 @@ export default function ChatWindow() {
                   sources={msg.sources}
                   streaming={msg.streaming}
                   showSources={!msg.streaming}
+                  correction={msg.correction}
                   onRegenerate={msg.role === "assistant" && i === messages.length - 1 ? handleRegenerate : undefined}
                   onEdit={msg.role === "user" ? (newContent) => handleEditMessage(i, newContent) : undefined}
                 />

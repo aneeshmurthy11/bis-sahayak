@@ -10,10 +10,18 @@ export interface Source {
   excerpt: string;
 }
 
+export interface CorrectionInfo {
+  original_word: string;
+  corrected_word: string;
+  confidence: number;
+  suggestions: string[];
+}
+
 export interface ChatResponse {
   answer: string;
   sources: Source[];
   mode: string;
+  correction?: CorrectionInfo | null;
 }
 
 export interface StandardRecommendation {

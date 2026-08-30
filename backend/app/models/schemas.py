@@ -25,10 +25,20 @@ class ChatRequest(BaseModel):
     mode: str = Field(default="general", description="general | recommend | certify | hallmark | lab")
 
 
+
+
+class CorrectionInfo(BaseModel):
+    """Info about auto-corrected typos in the user query."""
+    original_word: str
+    corrected_word: str
+    confidence: float
+    suggestions: list[str] = []
+
 class ChatResponse(BaseModel):
     answer: str
     sources: list[Source] = []
     mode: str = "general"
+    correction: CorrectionInfo | None = None
 
 
 # ── Product Recommendation ────────────────────────────────────────────────────
