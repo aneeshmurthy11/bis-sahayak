@@ -17,11 +17,43 @@ export interface CorrectionInfo {
   suggestions: string[];
 }
 
+export interface ProductInfo {
+  name: string;
+  is_codes: string[];
+  category: string;
+  certification: string;
+  certification_scheme: string;
+  description: string;
+  products_covered: string[];
+  key_tests: string[];
+  documents_required: string[];
+  related_standards: string[];
+  key_requirements: string[];
+  validity: string;
+}
+
+export interface ComparisonResult {
+  standard_a: string;
+  standard_b: string;
+  name_a: string;
+  name_b: string;
+  purpose: string[];
+  applies_to: string[];
+  certification: string[];
+  tests_count: number[];
+  products: string[][];
+}
+
 export interface ChatResponse {
   answer: string;
   sources: Source[];
   mode: string;
   correction?: CorrectionInfo | null;
+  confidence?: number | null;
+  product_info?: ProductInfo | null;
+  related_questions: string[];
+  comparison?: ComparisonResult | null;
+  follow_ups: string[];
 }
 
 export interface StandardRecommendation {
@@ -60,12 +92,13 @@ export type ChatMode = "general" | "recommend" | "certify" | "hallmark" | "lab";
 export async function sendChatMessage(
   message: string,
   language: string = "en",
-  mode: ChatMode = "general"
+  mode: ChatMode = "general",
+  history: { role: string; content: string }[] = []
 ): Promise<ChatResponse> {
   const res = await fetch(`${API_BASE}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, language, mode }),
+    body: JSON.stringify({ message, language, mode, history }),
   });
   if (!res.ok) {
     const err = await res.text();
@@ -104,5 +137,21 @@ export async function searchLabs(
   if (state) params.set("state", state);
   const res = await fetch(`${API_BASE}/labs?${params.toString()}`);
   if (!res.ok) throw new Error(`Labs API error: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Compare two IS standards.
+ */
+export async function compareStandards(
+  standardA: string,
+  standardB: string
+): Promise<{ comparison: ComparisonResult }> {
+  const res = await fetch(`${API_BASE}/compare`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ standard_a: standardA, standard_b: standardB }),
+  });
+  if (!res.ok) throw new Error(`Compare API error: ${res.status}`);
   return res.json();
 }

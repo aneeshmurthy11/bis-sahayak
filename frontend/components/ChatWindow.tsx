@@ -23,6 +23,11 @@ interface Message {
   mode?: ChatMode;
   streaming?: boolean;
   correction?: CorrectionInfo | null;
+  confidence?: number | null;
+  product_info?: import("@/lib/api").ProductInfo | null;
+  related_questions?: string[];
+  follow_ups?: string[];
+  comparison?: import("@/lib/api").ComparisonResult | null;
 }
 
 const MODE_TABS: { mode: ChatMode; label: string; icon: string }[] = [
@@ -235,6 +240,11 @@ export default function ChatWindow() {
           mode: activeMode,
           streaming: true,
           correction: data.correction || null,
+          confidence: data.confidence ?? null,
+          product_info: data.product_info || null,
+          related_questions: data.related_questions || [],
+          follow_ups: data.follow_ups || [],
+          comparison: data.comparison || null,
         };
         setMessages((prev) => [...prev, assistantMsg]);
 
@@ -299,6 +309,11 @@ export default function ChatWindow() {
     },
     [input, loading, language, mode, activeSessionId]
   );
+
+  const handleFollowUp = useCallback((question: string) => {
+    setInput(question);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }, []);
 
   const handleRegenerate = useCallback(async () => {
     if (loading || messages.length === 0) return;
@@ -428,6 +443,10 @@ export default function ChatWindow() {
                   streaming={msg.streaming}
                   showSources={!msg.streaming}
                   correction={msg.correction}
+                  confidence={msg.confidence}
+                  productInfo={msg.product_info}
+                  followUpQuestions={msg.follow_ups}
+                  onFollowUp={handleFollowUp}
                   onRegenerate={msg.role === "assistant" && i === messages.length - 1 ? handleRegenerate : undefined}
                   onEdit={msg.role === "user" ? (newContent) => handleEditMessage(i, newContent) : undefined}
                 />

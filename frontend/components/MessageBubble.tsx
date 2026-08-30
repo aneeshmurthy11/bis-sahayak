@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { Source, CorrectionInfo } from "@/lib/api";
+import { Source, CorrectionInfo, ProductInfo } from "@/lib/api";
 import SourceCitation from "./SourceCitation";
 
 interface MessageBubbleProps {
@@ -12,6 +12,10 @@ interface MessageBubbleProps {
   streaming?: boolean;
   showSources?: boolean;
   correction?: CorrectionInfo | null;
+  confidence?: number | null;
+  productInfo?: ProductInfo | null;
+  followUpQuestions?: string[];
+  onFollowUp?: (question: string) => void;
   onRegenerate?: () => void;
   onEdit?: (newContent: string) => void;
 }
@@ -23,6 +27,10 @@ export default function MessageBubble({
   streaming = false,
   showSources = true,
   correction,
+  confidence,
+  productInfo,
+  followUpQuestions = [],
+  onFollowUp,
   onRegenerate,
   onEdit,
 }: MessageBubbleProps) {
@@ -109,6 +117,61 @@ export default function MessageBubble({
                 <span className="font-medium text-[#3B82F6] dark:text-[#60A5FA]">{correction.corrected_word}?</span>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Confidence badge */}
+        {confidence !== null && confidence !== undefined && !isUser && !streaming && (
+          <div className="mb-2 ml-1 animate-fade-in">
+            <div className={"inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium " + (
+              confidence >= 85 ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/40 text-green-700 dark:text-green-400" :
+              confidence >= 65 ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 text-amber-700 dark:text-amber-400" :
+              "bg-gray-50 dark:bg-gray-800/20 border border-gray-200 dark:border-gray-700/40 text-gray-600 dark:text-gray-400"
+            )}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" strokeLinecap="round" strokeLinejoin="round" /><path d="M22 4L12 14.01l-3-3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              {confidence}% Match
+            </div>
+          </div>
+        )}
+
+        {/* Product Info Card */}
+        {productInfo && !isUser && !streaming && (
+          <div className="mb-3 ml-1 animate-fade-in-up">
+            <div className="rounded-xl border border-gray-200 dark:border-[#3F3F46] bg-white dark:bg-[#1E1E1E] overflow-hidden shadow-sm">
+              {/* Card header */}
+              <div className="px-4 py-3 bg-gradient-to-r from-blue-50 to-blue-100/50 dark:from-blue-900/20 dark:to-blue-900/10 border-b border-gray-200 dark:border-[#3F3F46]">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-[#ECECEC]">{productInfo.name}</h3>
+                  <span className={"text-[10px] font-medium px-2 py-0.5 rounded-full " + (
+                    productInfo.certification === "Mandatory" ? "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400" :
+                    productInfo.certification === "CRS" ? "bg-orange-100 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400" :
+                    "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
+                  )}>
+                    {productInfo.certification}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {productInfo.is_codes.map((code) => (
+                    <span key={code} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">{code}</span>
+                  ))}
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">{productInfo.category}</span>
+                </div>
+              </div>
+              {/* Card body */}
+              <div className="px-4 py-3 space-y-2 text-xs text-gray-600 dark:text-[#A1A1AA]">
+                <p className="text-gray-500 dark:text-[#71717A] italic">{productInfo.description}</p>
+                {productInfo.key_requirements.length > 0 && (
+                  <div>
+                    <p className="font-medium text-gray-700 dark:text-[#D4D4D8] mb-1">Key Requirements:</p>
+                    <ul className="space-y-0.5 ml-3 list-disc list-inside">
+                      {productInfo.key_requirements.map((req, i) => (
+                        <li key={i}>{req}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -224,6 +287,26 @@ export default function MessageBubble({
         {!hasSources && !isUser && showSources && !streaming && content && !content.includes("Sorry") && (
           <div className="mt-2 ml-1">
             <span className="text-[10px] text-gray-400 dark:text-[#71717A] italic">No exact match found in indexed standards</span>
+          </div>
+        )}
+
+        {/* Follow-up question pills */}
+        {followUpQuestions.length > 0 && !isUser && !streaming && onFollowUp && (
+          <div className="mt-3 ml-1 animate-fade-in-up">
+            <p className="text-[10px] font-medium text-gray-400 dark:text-[#71717A] mb-1.5 uppercase tracking-wide">Suggested follow-ups</p>
+            <div className="flex flex-wrap gap-1.5">
+              {followUpQuestions.slice(0, 5).map((q, i) => (
+                <button
+                  key={i}
+                  onClick={() => onFollowUp(q)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-full border border-gray-200 dark:border-[#3F3F46] bg-white dark:bg-[#1E1E1E] text-gray-600 dark:text-[#A1A1AA] hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300 dark:hover:border-blue-700 hover:text-blue-600 dark:hover:text-blue-400 transition-all duration-150 btn-press"
+                  aria-label={q}
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 opacity-50" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  {q.length > 50 ? q.slice(0, 50) + '...' : q}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
