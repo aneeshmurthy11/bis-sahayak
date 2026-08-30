@@ -196,27 +196,42 @@ async def chat(req: ChatRequest):
     history = [h for h in req.history if h.get("content")]
 
     if req.mode == "recommend":
-        # Product -> Standard recommendation
+        # Product -> Standard recommendation with rich responses
         recs = recommend_standards(query_en, top_k=5)
         if recs:
-            lines = ["### Applicable Indian Standards\n"]
-            for r in recs:
-                lines.append(f"### **{r.is_number}** — {r.title}\n")
-                lines.append(f"_{r.explanation}_\n")
-                lines.append("---\n")
-            answer = "\n".join(lines)
+            answer = _build_rich_recommendation(recs, product_info, query_en, history)
+            # Also run RAG for additional context on each standard
+            try:
+                rag_answer, rag_sources = rag_query(query_en, top_k=5, history=history)
+                if rag_sources:
+                    sources.extend(rag_sources)
+            except Exception:
+                pass
         elif product_info:
             answer = _build_product_response(product_info, query_en)
+            # Also run RAG for additional context
+            try:
+                rag_answer, rag_sources = rag_query(query_en, top_k=3, history=history)
+                if rag_answer and len(rag_answer) > 100:
+                    answer += "\n\n---\n\n" + rag_answer
+                if rag_sources:
+                    sources.extend(rag_sources)
+            except Exception:
+                pass
         else:
-            answer = (
-                "I couldn't identify specific standards for your product. "
-                "Please try describing your product in more detail, or check "
-                "[bis.gov.in](https://bis.gov.in) for the full product-wise standards list.\n\n"
-                "**Try asking:**\n"
-                "- What BIS standard applies to [your product]?\n"
-                "- Which IS code covers [product category]?\n"
-                "- BIS certification for [product name]"
-            )
+            # No direct match — fall back to RAG
+            try:
+                answer, sources = rag_query(query_en, top_k=5, history=history, is_expansion=is_expansion)
+            except Exception:
+                answer = (
+                    "I couldn't identify specific standards for your product. "
+                    "Please try describing your product in more detail, or check "
+                    "[bis.gov.in](https://bis.gov.in) for the full product-wise standards list.\n\n"
+                    "**Try asking:**\n"
+                    "- What BIS standard applies to [your product]?\n"
+                    "- Which IS code covers [product category]?\n"
+                    "- BIS certification for [product name]"
+                )
 
     elif req.mode == "certify":
         # Certification process explainer
@@ -452,13 +467,111 @@ async def chat(req: ChatRequest):
     )
 
 
-def _build_product_response(product_info: ProductInfo, query: str) -> str:
-    """Build a rich product response for the recommend mode."""
+def _build_rich_recommendation(recs, product_info, query, history) -> str:
+    """Build a rich, structured recommendation response following the professional template."""
     lines = [
-        f"### Applicable BIS Standard\n",
-        f"**{' / '.join(product_info.is_codes)}** — {product_info.name}\n",
+        "## ✅ Applicable BIS Standards\n",
+        f"Based on your query, these are the official BIS standards that apply.\n",
+    ]
+
+    # Product info card at top if available
+    if product_info:
+        lines.append(f"### **{product_info.name}**\n")
+        lines.append(f"_{product_info.description}_\n")
+        if product_info.products_covered:
+            lines.append("**Products covered:**")
+            for p in product_info.products_covered[:6]:
+                lines.append(f"- {p}")
+            lines.append("")
+
+    # Each standard gets its own rich section
+    for i, rec in enumerate(recs):
+        lines.append(f"---\n")
+        lines.append(f"### **{rec.is_number}** — {rec.title}\n")
+
+        # What this standard covers
+        lines.append("#### What this standard covers\n")
+        lines.append(f"{rec.explanation}\n")
+
+        # Who should follow this standard
+        if product_info and i == 0:
+            lines.append("#### Who should follow this standard?\n")
+            lines.append("- Manufacturers")
+            lines.append("- Importers")
+            lines.append("- Testing Laboratories")
+            lines.append("- Retailers")
+            lines.append("- Consumers (if applicable)\n")
+
+        # Key requirements
+        if product_info and i == 0 and product_info.key_requirements:
+            lines.append("#### Key Requirements\n")
+            for req in product_info.key_requirements:
+                lines.append(f"- {req}")
+            lines.append("")
+
+        # Key tests
+        if product_info and i == 0 and product_info.key_tests:
+            lines.append("#### Key Tests\n")
+            for test in product_info.key_tests[:6]:
+                lines.append(f"- {test}")
+            lines.append("")
+
+        # Practical example
+        if product_info and i == 0:
+            lines.append("#### Practical Example\n")
+            name_lower = product_info.name.lower()
+            lines.append(
+                f"A manufacturer of {product_info.name.lower()} must ensure their product "
+                f"complies with {' / '.join(product_info.is_codes)} before applying for BIS certification. "
+                f"This involves testing at a BIS-recognized laboratory and meeting all safety and quality "
+                f"requirements specified in the standard.\n"
+            )
+
+    # Compliance summary table
+    if product_info:
+        lines.append("---\n")
+        lines.append("## Compliance Summary\n")
+        lines.append("| Requirement | Status |")
+        lines.append("| --- | --- |")
+        lines.append(f"| BIS Certification Required | **{product_info.certification}** ({product_info.certification_scheme}) |")
+        lines.append(f"| ISI Mark Required | {'Yes' if product_info.certification_scheme == 'ISI' else 'Depends on product category'} |")
+        lines.append(f"| Testing Required | Yes — at BIS-recognized laboratory |")
+        if product_info.documents_required:
+            lines.append(f"| Documents Required | {len(product_info.documents_required)} documents |")
+        lines.append("")
+
+    # Related standards
+    if product_info and product_info.related_standards:
+        lines.append("## Related BIS Standards\n")
+        for std in product_info.related_standards:
+            lines.append(f"- **{std}**")
+        lines.append("")
+
+    # Source
+    lines.append("## Source\n")
+    lines.append("_Information sourced from indexed BIS standards and official documentation._\n")
+
+    return "\n".join(lines)
+
+
+def _build_product_response(product_info: ProductInfo, query: str) -> str:
+    """Build a rich product response when no recommendation matches but KB has data."""
+    lines = [
+        f"## ✅ BIS Standards for {product_info.name}\n",
         f"_{product_info.description}_\n",
     ]
+
+    if product_info.is_codes:
+        lines.append("### Applicable Standards\n")
+        for code in product_info.is_codes:
+            lines.append(f"- **{code}**")
+        lines.append("")
+
+    if product_info.products_covered:
+        lines.append("### Products Covered\n")
+        for p in product_info.products_covered[:8]:
+            lines.append(f"- {p}")
+        lines.append("")
 
     if product_info.key_requirements:
         lines.append("### Key Requirements\n")
@@ -473,7 +586,7 @@ def _build_product_response(product_info: ProductInfo, query: str) -> str:
         lines.append("")
 
     if product_info.certification:
-        lines.append(f"### Certification Status\n")
+        lines.append("### Certification Status\n")
         lines.append(f"**{product_info.certification}** — {product_info.certification_scheme} Scheme\n")
 
     if product_info.documents_required:
@@ -483,9 +596,15 @@ def _build_product_response(product_info: ProductInfo, query: str) -> str:
         lines.append("")
 
     if product_info.related_standards:
-        lines.append("### Related Standards\n")
+        lines.append("### Related BIS Standards\n")
         for std in product_info.related_standards:
             lines.append(f"- **{std}**")
+        lines.append("")
+
+    if product_info.follow_up_questions:
+        lines.append("### Suggested Follow-up Questions\n")
+        for q in product_info.follow_up_questions[:4]:
+            lines.append(f"- {q}")
 
     return "\n".join(lines)
 
