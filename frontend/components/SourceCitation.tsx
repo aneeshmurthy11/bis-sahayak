@@ -10,6 +10,10 @@ interface SourceCitationProps {
 export default function SourceCitation({ source }: SourceCitationProps) {
   const [expanded, setExpanded] = useState(false);
 
+  // Detect IS code in document name for badge
+  const isCodeMatch = source.document.match(/IS\s*(\d+)/i);
+  const isCode = isCodeMatch ? `IS ${isCodeMatch[1]}` : null;
+
   return (
     <div className="relative inline-block">
       <button
@@ -18,13 +22,20 @@ export default function SourceCitation({ source }: SourceCitationProps) {
                    text-[11px] font-medium hover:bg-gray-200 dark:hover:bg-[#3F3F46] transition-colors cursor-pointer border border-gray-200 dark:border-[#3F3F46]
                    btn-press"
       >
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0">
-          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-          <polyline points="14 2 14 8 20 8" />
-          <line x1="16" y1="13" x2="8" y2="13" />
-          <line x1="16" y1="17" x2="8" y2="17" />
-        </svg>
-        {source.document}
+        {isCode && (
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800/40">
+            {isCode}
+          </span>
+        )}
+        {!isCode && (
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+          </svg>
+        )}
+        <span className="truncate max-w-[180px]">{source.document}</span>
         {source.clause && <span className="text-gray-400 dark:text-[#71717A]"> {source.clause}</span>}
       </button>
 

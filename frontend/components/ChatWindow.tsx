@@ -93,7 +93,7 @@ export default function ChatWindow() {
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<ChatMode>("general");
   const [language, setLanguage] = useState("auto");
-  const [thinkingPhase, setThinkingPhase] = useState<"thinking" | "searching">("thinking");
+  const [thinkingPhase, setThinkingPhase] = useState<"thinking" | "searching" | "generating">("thinking");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -156,7 +156,9 @@ export default function ChatWindow() {
   useEffect(() => {
     if (!loading) return;
     setThinkingPhase("thinking");
-    const timer = setTimeout(() => setThinkingPhase("searching"), 5000);
+    const t1 = setTimeout(() => setThinkingPhase("searching"), 3000);
+    const t2 = setTimeout(() => setThinkingPhase("generating"), 8000);
+    const timer = t2;
     return () => clearTimeout(timer);
   }, [loading]);
 

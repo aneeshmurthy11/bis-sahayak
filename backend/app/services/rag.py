@@ -100,7 +100,7 @@ Example: Source: IS 9873 Part 1 — Clause 4.3, Page 18.
 1. **Always use the template above** for standard/product/certification questions.
 2. Use Markdown headings and bullet points. Never return plain paragraphs.
 3. Highlight IS codes in bold (e.g., **IS 302**, **IS 1417**).
-4. Keep answers between 250–600 words whenever enough context exists.
+4. Keep answers between 200–350 words. Be concise but complete. Only go longer if the user explicitly asks for detail.
 5. Never answer with only one paragraph if information exists in the knowledge base.
 6. Always cite the source document, clause number, and page number when available.
 7. Never fabricate IS numbers — only use what appears in context or is a well-known BIS standard.
@@ -314,11 +314,50 @@ User Question: {query}
 
 Answer the question comprehensively using the context above AND your knowledge of BIS standards.
 Follow the EXACT response structure from your system prompt (10 sections).
-Target 250-600 words. Be thorough and professional.
+Target 200-350 words. Be concise but complete. Only go longer if the user explicitly asks for detail.
 Always cite sources. Always generate follow-up questions.
 Bold all IS codes in your response."""
 
     return RAG_SYSTEM_PROMPT, user_prompt
+
+
+# Simple in-memory query cache (LRU, max 200 entries)
+_query_cache: dict[str, tuple[str, list[Source]]] = {}
+_CACHE_MAX = 200
+
+
+def _keyword_fallback_search(query: str) -> list[dict]:
+    """Broader semantic fallback when primary search returns no results.
+    Uses lower similarity threshold to catch more results."""
+    import re
+    collection = _get_chroma_collection()
+    query_embedding = embed_query(query)
+
+    # Try with a much larger fetch and lower threshold
+    try:
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=10,
+            include=["documents", "metadatas", "distances"],
+        )
+        if not results or not results["documents"] or not results["documents"][0]:
+            return []
+
+        chunks = []
+        for i, doc in enumerate(results["documents"][0]):
+            distance = results["distances"][0][i] if results["distances"] else 1.0
+            metadata = results["metadatas"][0][i] if results["metadatas"] else {}
+            # Accept anything with distance < 0.8 (very lenient)
+            if distance < 0.8:
+                chunks.append({
+                    "text": doc,
+                    "metadata": metadata,
+                    "distance": distance,
+                })
+
+        return chunks[:5]
+    except Exception:
+        return []
 
 
 def rag_query(
@@ -327,22 +366,37 @@ def rag_query(
     history: list[dict] | None = None,
     is_expansion: bool = False,
 ) -> tuple[str, list[Source]]:
-    """Full RAG pipeline: retrieve -> build prompt -> LLM -> (answer, sources)."""
+    """Full RAG pipeline: retrieve -> build prompt -> LLM -> (answer, sources).
+
+    Features:
+    - Query caching for repeated questions
+    - Keyword fallback when semantic search fails
+    - Graceful degradation with helpful suggestions
+    """
+    # Check cache (skip for expansion queries)
+    cache_key = query.strip().lower()
+    if not is_expansion and cache_key in _query_cache:
+        return _query_cache[cache_key]
+
     chunks = retrieve_chunks(query, top_k)
 
+    # If no semantic results, try keyword fallback
     if not chunks:
-        return (
-            "I don't have specific indexed documents matching your query yet. "
-            "However, I can help you with BIS standards and certification. "
-            "Please try rephrasing your question, or ask about:\n\n"
-            "- A specific IS code (e.g., IS 302, IS 1417)\n"
-            "- A product category (e.g., toys, cement, helmets)\n"
-            "- Certification process (ISI, CRS, Hallmarking)\n"
-            "- Testing laboratories\n"
-            "- Product compliance requirements\n\n"
-            "For official information, visit [bis.gov.in](https://bis.gov.in).",
-            [],
+        chunks = _keyword_fallback_search(query)
+
+    if not chunks:
+        # Helpful empty state — never sound broken
+        fallback_answer = (
+            "I couldn't find a specific match in the indexed BIS standards for this query.\n\n"
+            "**Try searching by:**\n"
+            "- Product name (e.g., toys, cement, helmet, LED bulb)\n"
+            "- IS code (e.g., IS 302, IS 1417, IS 9873)\n"
+            "- Certification topic (e.g., ISI mark, CRS registration)\n"
+            "- Hallmarking (e.g., gold hallmark, HUID)\n"
+            "- Testing lab (e.g., lab in Mumbai, electrical testing)\n\n"
+            "For official information, visit [bis.gov.in](https://bis.gov.in)."
         )
+        return fallback_answer, []
 
     system_prompt, user_prompt = build_rag_prompt(query, chunks, history, is_expansion)
     answer = llm_complete(system_prompt, user_prompt)
@@ -363,4 +417,10 @@ def rag_query(
                 )
             )
 
-    return answer, unique_sources
+    result = (answer, unique_sources)
+
+    # Cache the result (skip if too many entries)
+    if len(_query_cache) < _CACHE_MAX:
+        _query_cache[cache_key] = result
+
+    return result

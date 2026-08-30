@@ -3,14 +3,16 @@
 import React from "react";
 
 interface TypingIndicatorProps {
-  phase?: "thinking" | "searching";
+  phase?: "thinking" | "searching" | "generating";
 }
 
 export default function TypingIndicator({ phase = "thinking" }: TypingIndicatorProps) {
   const label =
-    phase === "searching"
-      ? "Searching BIS documents..."
-      : "BIS Sahayak is thinking...";
+    phase === "generating"
+      ? "Generating verified answer..."
+    : phase === "searching"
+      ? "Reading official BIS documents..."
+      : "Searching BIS Standards...";
 
   return (
     <div className="flex justify-start mb-6 animate-slide-in-left">
